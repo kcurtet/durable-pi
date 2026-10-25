@@ -178,3 +178,51 @@ export const curatedModels = [
   },
 ] as const;
 export const defaultModelId = "anthropic/claude-sonnet-5.5";
+
+import type { ProviderId } from "./config.js";
+
+export type RoutedProvider = Exclude<ProviderId, "faux">; // "openrouter" | "zai-coding-cn"
+
+export interface CuratedModel {
+  id: string;
+  name: string;
+  tier: string;
+  icon: string;
+}
+
+export interface ProviderCatalog {
+  models: readonly CuratedModel[];
+  defaultModelId: string;
+}
+
+export const providerCatalogs: Record<RoutedProvider, ProviderCatalog> = {
+  openrouter: { models: curatedModels, defaultModelId },
+  "zai-coding-cn": {
+    models: [
+      { id: "glm-5.3", name: "GLM-5.3", tier: "A", icon: "zai.png" },
+      { id: "glm-5.3-flash", name: "GLM-5.3-Flash", tier: "B", icon: "zai.png" },
+      { id: "glm-5.3-highspeed", name: "GLM-5.3-Highspeed", tier: "B", icon: "zai.png" },
+      { id: "glm-4.6v", name: "GLM-4.6V", tier: "B", icon: "zai.png" },
+    ],
+    defaultModelId: "glm-5.3",
+  },
+};
+
+export function isKnownModelRef(provider: RoutedProvider, ref: unknown): boolean {
+  const r = ref as { provider?: unknown; modelId?: unknown } | undefined;
+  if (!r || r.provider !== provider || typeof r.modelId !== "string") return false;
+  return providerCatalogs[provider].models.some((m) => m.id === r.modelId);
+}
+
+/** Pure resolution: a ref of the active provider passes through if curated; anything else clamps to the default. */
+export function resolveModelRef(provider: RoutedProvider, ref?: { provider: string; modelId: string }) {
+  const exact = ref?.provider === provider ? ref.modelId : `${ref?.provider}/${ref?.modelId}`;
+  return {
+    provider,
+    modelId: providerCatalogs[provider].models.some((m) => m.id === exact)
+      ? exact
+      : providerCatalogs[provider].defaultModelId,
+  };
+}
+
+
