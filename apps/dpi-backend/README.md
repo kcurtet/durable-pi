@@ -30,8 +30,9 @@ With the repo's network config, `just net up local && just backend run` does the
 | `DPI_DATA_DIR` | `$DPI_HOME/backend` | catalog, app state, `sessions/`, `archive/` |
 | `DPI_HOME` | `~/.dpi` | where `backend.env` is read (set by the service unit) |
 | `DPI_ENV_FILE` | `$DPI_HOME/backend.env` | the env file to read |
-| `DPI_PROVIDER` | `openrouter` | `faux` gives a free deterministic model for tests |
+| `DPI_PROVIDER` | `openrouter` | `openrouter` \| `zai-coding-cn` \| `faux`. `faux` gives a free deterministic model for tests; `zai-coding-cn` serves the GLM Coding Plan (CN) models. Any other value fails startup with a clear error |
 | `OPENROUTER_API_KEY` | | model access, required unless `DPI_PROVIDER=faux`. Without it the device lists no models. Never sent to clients |
+| `ZAI_CODING_CN_API_KEY` | | model access when `DPI_PROVIDER=zai-coding-cn` (GLM Coding Plan CN). Same rules as `OPENROUTER_API_KEY`. Never sent to clients |
 | `TYPESAFE_API_KEY` | | optional: `jev-damage-control` asks Jev with it, else through OpenRouter |
 
 Flags `--port`, `--host`, `--name`, `--start-dirs`, `--data-dir` and `--env-file` override the env.

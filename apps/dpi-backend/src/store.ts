@@ -39,7 +39,9 @@ import { randomUUID } from "node:crypto";
 import { BACKGROUND_CONTEXT as ctx, withAbortSignal } from "@earendil-works/chord/context";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { openrouterProvider } from "@earendil-works/pi-ai/providers/openrouter";
-import { curatedModels, defaultModelId } from "./model-catalog.js";
+import { zaiCodingCnProvider } from "@earendil-works/pi-ai/providers/zai-coding-cn";
+import { isKnownModelRef, providerCatalogs, resolveModelRef, type RoutedProvider } from "./model-catalog.js";
+import type { ProviderId } from "./config.js";
 import { fauxModels, installFaux } from "./faux.js";
 import {
   Harness,
@@ -86,11 +88,16 @@ export type SessionRow = {
   provider: string;
 };
 
+const ROUTED_PROVIDERS: Record<RoutedProvider, () => ReturnType<typeof openrouterProvider>> = {
+  openrouter: openrouterProvider,
+  "zai-coding-cn": zaiCodingCnProvider,
+};
+
 export interface StoreOptions {
   dataDir: string;
   startDirs: string[];
   name: string;
-  provider: "openrouter" | "faux";
+  provider: ProviderId;
 }
 
 /** Agent documents a client may read or stream, by kind. */
@@ -179,13 +186,14 @@ export class Store {
   private constructor(readonly options: StoreOptions) {
     if (options.provider === "faux") installFaux(this.models);
     else {
-      const provider = openrouterProvider();
+      const provider = ROUTED_PROVIDERS[options.provider]();
       const catalog = provider.getModels();
-      for (const model of curatedModels)
-        if (!catalog.some((m) => m.id === model.id)) throw Error(`OpenRouter catalog missing ${model.id}`);
+      const curated = providerCatalogs[options.provider].models;
+      for (const model of curated)
+        if (!catalog.some((m) => m.id === model.id)) throw Error(`${options.provider} catalog missing ${model.id}`);
       this.models.setProvider({
         ...provider,
-        getModels: () => catalog.filter((m) => curatedModels.some((c) => c.id === m.id)),
+        getModels: () => catalog.filter((m) => curated.some((c) => c.id === m.id)),
       });
     }
     mkdirSync(options.dataDir, { recursive: true, mode: 0o700 });
@@ -264,7 +272,7 @@ export class Store {
   }
 
   private defaultModel() {
-    return this.options.provider === "faux" ? fauxModels[0].id : defaultModelId;
+    return this.options.provider === "faux" ? fauxModels[0].id : providerCatalogs[this.options.provider].defaultModelId;
   }
 
   private async loadModels(): Promise<ModelInfo[]> {
@@ -279,14 +287,15 @@ export class Store {
         reasoning: false,
         cost: { input: 0, output: 0 },
       }));
-    const available = await this.models.getAvailable("openrouter", { signal: AbortSignal.timeout(10000) });
-    return curatedModels.flatMap((c) => {
+    const provider = this.options.provider as RoutedProvider;
+    const available = await this.models.getAvailable(provider, { signal: AbortSignal.timeout(10000) });
+    return providerCatalogs[provider].models.flatMap((c) => {
       const m = available.find((m) => m.id === c.id);
       return m
         ? [
             {
               id: m.id,
-              provider: "openrouter",
+              provider,
               name: c.name,
               tier: c.tier,
               icon: c.icon,
@@ -304,11 +313,7 @@ export class Store {
       const id = fauxModels.some((m) => m.id === model?.modelId) ? model!.modelId : fauxModels[0].id;
       return { provider: "faux", modelId: id };
     }
-    const exact = model?.provider === "openrouter" ? model.modelId : `${model?.provider}/${model?.modelId}`;
-    return {
-      provider: "openrouter",
-      modelId: curatedModels.some((m) => m.id === exact) ? exact : defaultModelId,
-    };
+    return resolveModelRef(this.options.provider, model);
   }
 
   validateModel(model: unknown): ModelRef {
@@ -318,9 +323,7 @@ export class Store {
     const known =
       this.options.provider === "faux"
         ? m.provider === "faux" && fauxModels.some((f) => f.id === m.modelId)
-        : m.provider === "openrouter" &&
-          curatedModels.some((c) => c.id === m.modelId) &&
-          !!this.models.getModel(m.provider, m.modelId);
+        : isKnownModelRef(this.options.provider, m) && !!this.models.getModel(m.provider, m.modelId);
     if (!known) throw invalid(`Unknown model ${m.provider}/${m.modelId}. Choose one from GET /v1/device models`);
     return { provider: m.provider, modelId: m.modelId };
   }
@@ -332,7 +335,9 @@ export class Store {
     for (const root of this.startDirs) {
       try {
         dirs.push({ name: root, path: await realpath(root) });
-      } catch {}
+      } catch {
+        // a start dir that vanished or is unreadable: skip it
+      }
     }
     return { path: "", dirs };
   }
