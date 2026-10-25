@@ -14,13 +14,21 @@ const routedOptions = async (provider: "zai-coding-cn" | "openrouter") => {
 };
 
 test("Store.open with zai-coding-cn: default glm-5.3, validation, session creation (offline)", async (t) => {
+  // Hermetic: with an ambient ZAI_CODING_CN_API_KEY, pi-ai's getAvailable lists the bundled
+  // models; without it, it degrades to []. Scrub the key so the offline assertion below is
+  // deterministic regardless of the machine running the suite.
+  const hadKey = process.env.ZAI_CODING_CN_API_KEY;
+  if (hadKey) delete process.env.ZAI_CODING_CN_API_KEY;
+  t.after(() => {
+    if (hadKey) process.env.ZAI_CODING_CN_API_KEY = hadKey;
+  });
   const { options, work, cleanup } = await routedOptions("zai-coding-cn");
   t.after(() => void cleanup());
   const store = await Store.open(options);
   t.after(() => store.close());
 
   assert.equal(store.deviceInfo().defaultModel, "glm-5.3");
-  assert.equal(store.deviceInfo().models.length, 0); // getAvailable not called offline
+  assert.equal(store.deviceInfo().models.length, 0); // no key → provider unauthenticated → empty listing
 
   assert.deepEqual(store.validateModel({ provider: "zai-coding-cn", modelId: "glm-5.3-flash" }), {
     provider: "zai-coding-cn",
