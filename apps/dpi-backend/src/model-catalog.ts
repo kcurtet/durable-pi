@@ -224,5 +224,3 @@ export function resolveModelRef(provider: RoutedProvider, ref?: { provider: stri
       : providerCatalogs[provider].defaultModelId,
   };
 }
-
-
