@@ -26,3 +26,36 @@ test("DPI_PROVIDER rejects unknown values with a clear error", async () => {
   const env = await baseEnv();
   assert.throws(() => loadConfig([], { ...env, DPI_PROVIDER: "nope" }), /Invalid DPI_PROVIDER 'nope'.*openrouter.*zai-coding-cn.*faux/);
 });
+
+test("DPI_HOME inside the env file applies (home was computed before loadEnvFile)", async (t) => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "dpi-cfg-")));
+  const fromFile = join(dir, "home-from-file");
+  const envFile = join(dir, "backend.env");
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(envFile, `DPI_HOME=${fromFile}\n`);
+  const before = process.env.DPI_HOME;
+  t.after(() => {
+    if (before === undefined) delete process.env.DPI_HOME;
+    else process.env.DPI_HOME = before;
+  });
+  const { DPI_HOME: _drop, ...env } = await baseEnv();
+  const config = loadConfig([], { ...env, DPI_ENV_FILE: envFile });
+  assert.equal(config.home, fromFile);
+  assert.ok(config.dataDir.startsWith(fromFile));
+});
+
+test("process env DPI_HOME beats the env file", async (t) => {
+  const dir = await realpath(await mkdtemp(join(tmpdir(), "dpi-cfg-")));
+  const fromFile = join(dir, "home-from-file");
+  const fromProcess = join(dir, "home-from-process");
+  const envFile = join(dir, "backend.env");
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(envFile, `DPI_HOME=${fromFile}\n`);
+  const before = process.env.DPI_HOME;
+  t.after(() => {
+    if (before === undefined) delete process.env.DPI_HOME;
+    else process.env.DPI_HOME = before;
+  });
+  const config = loadConfig([], { ...(await baseEnv()), DPI_HOME: fromProcess, DPI_ENV_FILE: envFile });
+  assert.equal(config.home, fromProcess);
+});

@@ -19,3 +19,5 @@ Review (2 revisores frescos, ejes Estándares/Spec): SIN criticals ni importants
 - (dirección) Repeated Switches provider==='faux' en 5 métodos → catálogo que incluya faux
 Ruling: comentario cosmético en catch preexistente se mantiene (desbloqueó el edit del agente, inofensivo)
 Descubierto (upstream, no nuestro): DPI_HOME dentro de backend.env NO aplica — config.ts calcula home ANTES de loadEnvFile; solo vale como variable de proceso o flag. Anotado para issue upstream.
+
+Ruling (post-merge): DPI_HOME-in-backend.env reclasificado de 'upstream' a fix propio (nada se envía a disler). Fix: loadConfig captura DPI_HOME pre-carga (proceso > fichero), deja que loadEnvFile lo aporte, y deriva home después. Tests: config 2 nuevos (file aplica / proceso gana). Suite 24/24.

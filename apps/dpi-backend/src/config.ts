@@ -31,9 +31,13 @@ export function loadConfig(argv = process.argv.slice(2), env = process.env): Bac
     if (!value || value.startsWith("--")) throw Error(`${key} needs a value`);
     return value;
   };
-  const home = expand(env.DPI_HOME ?? join(homedir(), ".dpi"));
-  const envFile = expand(flag("--env-file", env.DPI_ENV_FILE ?? join(home, "backend.env")));
+  const initialHome = expand(env.DPI_HOME ?? join(homedir(), ".dpi"));
+  const envFile = expand(flag("--env-file", env.DPI_ENV_FILE ?? join(initialHome, "backend.env")));
+  // DPI_HOME may live in the env file itself: keep the pre-load value (process env wins),
+  // then let the freshly loaded file fill it in before deriving home.
+  const hadHome = env.DPI_HOME;
   if (existsSync(envFile)) process.loadEnvFile(envFile);
+  const home = expand(hadHome ?? process.env.DPI_HOME ?? initialHome);
   const config: BackendConfig = {
     name: flag("--name", env.DPI_DEVICE_NAME ?? hostname().replace(/\.local$/, "")),
     host: flag("--host", env.DPI_HOST ?? "127.0.0.1"),
